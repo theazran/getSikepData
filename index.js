@@ -5,9 +5,8 @@ const cookieJar = request.jar();
 request = request.defaults({ jar: cookieJar });
 require("dotenv").config();
 
-const bodyParser = require("body-parser");
 const app = express();
-app.use(bodyParser.json());
+app.use(express.json());
 
 app.get("/sikep", async (req, res) => {
   try {
