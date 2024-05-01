@@ -136,12 +136,9 @@ app.get("/sikep", async (req, res) => {
       console.log("Data berhasil diolah...");
       res.send({
         status: 200,
-        data: outputText
-      })
-      // fs.writeFileSync("cookies.json", JSON.stringify(outputText, null, 2));
-
-      // await sendNotification(outputText);
-      console.log("Notifikasi berhasil dikirim...");
+        data: outputText,
+      });
+      fs.writeFileSync("data.json", outputText);
       cookieJar._jar.removeAllCookies(function (err) {
         if (err) {
           console.error("Gagal menghapus cookie:", err);
@@ -157,6 +154,16 @@ app.get("/sikep", async (req, res) => {
     res.status(500).send({ error: "Internal server error" });
   }
 });
+
+app.get("/kirim", async (req, res) => {
+  const data = fs.readFileSync("data.json", "utf-8");
+  const kirim = await sendNotification(data);
+  res.json({
+    status: 200,
+    message: "Data berhasil dikirim",
+  });
+});
+
 
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
