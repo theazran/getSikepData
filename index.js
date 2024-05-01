@@ -5,10 +5,11 @@ const cookieJar = request.jar();
 request = request.defaults({ jar: cookieJar });
 require("dotenv").config();
 
+const bodyParser = require('body-parser');
 const app = express();
-app.use(express.json());
+app.use(bodyParser.json());
 
-app.get("/sikep", async (req, res) => {
+app.post("/sikep", async (req, res) => {
   try {
     const result = await request.get(
       "https://sikep.mahkamahagung.go.id/site/login",
