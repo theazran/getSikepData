@@ -8,15 +8,14 @@ require("dotenv").config();
 const app = express();
 app.use(express.json());
 const port = 3000;
-const requestTimeout = 30000; 
+const requestTimeout = 30000;
 
 async function fetchCSRFToken() {
   const result = await request.get(
     "https://sikep.mahkamahagung.go.id/site/login",
-    { timeout: requestTimeout }
   );
   const csrfTokenMatch = result.match(
-    /name="csrfParamSikepBackend" value="([^"]*)"/
+    /name="csrfParamSikepBackend" value="([^"]*)"/,
   );
   if (!csrfTokenMatch) {
     throw new Error("CSRF token not found");
@@ -36,7 +35,7 @@ async function login(csrfToken) {
       },
       followAllRedirects: true,
       jar: cookieJar,
-    }
+    },
   );
   return loginResponse.includes("Selamat datang");
 }
@@ -112,14 +111,16 @@ async function sendNotification(outputText) {
   const options = {
     method: "GET",
     url: `https://notifku.my.id/send?number=000&to=6285255646434@s.whatsapp.net&type=chat&message=${encodeURIComponent(
-      outputText
+      outputText,
     )}`,
   };
   return await request(options);
 }
 
-
 app.get("/sikep", async (req, res) => {
+  res.send({
+    message: "Data berhasil diambil dan dikirim",
+  });
   try {
     const csrfToken = await fetchCSRFToken();
     console.log("Mendapatkan CSRF Token...");
@@ -133,9 +134,6 @@ app.get("/sikep", async (req, res) => {
       console.log("Data berhasil diolah...");
       await sendNotification(outputText);
       console.log("Notifikasi berhasil dikirim...");
-      res.send({
-        message: "Data berhasil diambil dan dikirim",
-      });
       cookieJar._jar.removeAllCookies(function (err) {
         if (err) {
           console.error("Gagal menghapus cookie:", err);
@@ -148,7 +146,7 @@ app.get("/sikep", async (req, res) => {
     }
   } catch (error) {
     console.error("Error:", error.message);
-    res.status(500).send({ error: "Internal server error" }); 
+    res.status(500).send({ error: "Internal server error" });
   }
 });
 
