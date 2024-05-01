@@ -4,20 +4,10 @@ const cheerio = require("cheerio");
 const cookieJar = request.jar();
 request = request.defaults({ jar: cookieJar });
 require("dotenv").config();
-const cron = require("node-cron");
 
 const app = express();
 app.use(express.json());
 
-cron.schedule(
-  "20 16 * * 1-5",
-  () => {
-    getSikepData();
-  },
-  {
-    timezone: "Asia/Makassar",
-  },
-);
 app.get("/sikep", async (req, res) => {
   try {
     const result = await request.get(
