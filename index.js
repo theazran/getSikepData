@@ -10,7 +10,7 @@ const app = express();
 app.use(express.json());
 
 cron.schedule(
-  "50 16 * * 1-5",
+  "20 16 * * 1-5",
   () => {
     getSikepData();
   },
@@ -18,8 +18,7 @@ cron.schedule(
     timezone: "Asia/Makassar",
   },
 );
-
-async function getSikepData() {
+app.get("/sikep", async (req, res) => {
   try {
     const result = await request.get(
       "https://sikep.mahkamahagung.go.id/site/login",
@@ -125,6 +124,9 @@ async function getSikepData() {
               console.error("Error:", error.message);
             } else {
               console.log("Response:", response.body);
+              res.send({
+                message: "Data berhasil diambil dan dikirim",
+              });
               cookieJar._jar.removeAllCookies(function (err) {
                 if (err) {
                   console.error("Gagal menghapus cookie:", err);
@@ -144,6 +146,6 @@ async function getSikepData() {
   } catch (error) {
     console.error("Error:", error.message);
   }
-}
+});
 
 module.exports = app;
