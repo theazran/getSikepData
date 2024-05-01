@@ -10,7 +10,7 @@ const app = express();
 app.use(express.json());
 
 cron.schedule(
-  "35 16 * * 1-5",
+  "50 16 * * 1-5",
   () => {
     getSikepData();
   },
