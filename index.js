@@ -10,9 +10,7 @@ const app = express();
 app.use(express.json());
 const port = 3000;
 
-// Set timeout for requests
 const requestTimeout = 30000;
-
 async function fetchCSRFToken() {
   const result = await request.get(
     "https://sikep.mahkamahagung.go.id/site/login",
@@ -57,7 +55,7 @@ async function scrapeData() {
   return html;
 }
 
-function processData(html) {
+function processData(html, res) {
   const $ = cheerio.load(html);
   const jsonData = [];
 
@@ -85,69 +83,55 @@ function processData(html) {
   });
 
   const telatSikep = jsonData.filter((data) => data.hadir >= "08:01");
-  const sikepPagi = jsonData.filter((data) => data.hadir === "-");
-  const sikepPulang = jsonData.filter((data) => data.pulang === "-");
+  const tidakSikepPagi = jsonData.filter((data) => data.hadir === "-");
+  const tidakSikepPulang = jsonData.filter((data) => data.pulang === "-");
+  const sudahSikepPagi = jsonData.filter((data) => data.hadir !== "-");
   const sudahSikepPulang = jsonData.filter((data) => data.pulang !== "-");
+  const author = "M Asran";
 
-  let outputText = "Terlambat Absen SIKEP:\n";
-  telatSikep.forEach((data, index) => {
-    outputText += `${index + 1}. ${data.nama} - ${data.hadir}\n`;
-  });
-
-  outputText += "\n\nDaftar nama yang tidak absen Sikep pagi:\n";
-  sikepPagi.forEach((data, index) => {
-    outputText += `${index + 1}. ${data.nama}\n`;
-  });
-
-  outputText += "\n\nDaftar nama yang tidak absen Sikep pulang:\n";
-  sikepPulang.forEach((data, index) => {
-    outputText += `${index + 1}. ${data.nama}\n`;
-  });
-
-  outputText += "\n\nDaftar nama yang absen Sikep pulang:\n";
-  sudahSikepPulang.forEach((data, index) => {
-    outputText += `${index + 1}. ${data.nama} - ${data.pulang}\n`;
-  });
-
-  return outputText;
-}
-
-async function sendNotification(outputText) {
-  const options = {
-    method: "GET",
-    url: `https://notifku.my.id/send?number=000&to=6285255646434@s.whatsapp.net&type=chat&message=${encodeURIComponent(
-      outputText,
-    )}`,
-  };
-  return await request(options);
+  res.send(
+    JSON.stringify(
+      {
+        telatSikep,
+        tidakSikepPagi,
+        sudahSikepPagi,
+        tidakSikepPulang,
+        sudahSikepPulang,
+        author,
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 app.get("/sikep", async (req, res) => {
   try {
     const csrfToken = await fetchCSRFToken();
     console.log("Mendapatkan CSRF Token...");
-
     const isLoggedIn = await login(csrfToken);
     if (isLoggedIn) {
       console.log("Login berhasil...");
       const html = await scrapeData();
       console.log("Mendapatkan data...");
-      const outputText = processData(html);
+      const outputText = processData(html, res);
       console.log("Data berhasil diolah...");
-      res.send({
-        status: 200,
-        data: outputText,
-      });
-      fs.writeFileSync("data.json", outputText);
-      cookieJar._jar.removeAllCookies(function (err) {
-        if (err) {
-          console.error("Gagal menghapus cookie:", err);
-        } else {
-          console.log("Cookie berhasil dihapus.");
-        }
-      });
+      setTimeout(() => {
+        cookieJar._jar.removeAllCookies(function (err) {
+          if (err) {
+            console.error("Gagal menghapus cookie:", err);
+          } else {
+            console.log("Cookie berhasil dihapus.");
+          }
+        });
+      }, 10000);
     } else {
       console.log("Login gagal");
+      res.json({
+        status: 401,
+        message: "Login gagal",
+        author: "M Asran",
+      });
     }
   } catch (error) {
     console.error("Error:", error.message);
@@ -155,18 +139,8 @@ app.get("/sikep", async (req, res) => {
   }
 });
 
-app.get("/kirim", async (req, res) => {
-  const data = fs.readFileSync("data.json", "utf-8");
-  const kirim = await sendNotification(data);
-  res.json({
-    status: 200,
-    message: "Data berhasil dikirim",
-  });
-});
-
-
 app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`);
+  console.log(`Oke gasss... ${port}`);
 });
 
 module.exports = app;
