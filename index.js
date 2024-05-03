@@ -89,6 +89,31 @@ function processData(html, res) {
   const sudahSikepPulang = jsonData.filter((data) => data.pulang !== "-");
   const author = "M Asran";
 
+  let outputText = "Telat SIKEP Pagi:\n";
+  telatSikep.forEach((data, index) => {
+    outputText += `${index + 1}. ${data.nama} - ${data.hadir}\n`;
+  });
+
+  outputText += "\n\nTidak SIKEP Pagi:\n";
+  tidakSikepPagi.forEach((data, index) => {
+    outputText += `${index + 1}. ${data.nama}\n`;
+  });
+
+  outputText += "\n\nSudah SIKEP Pagi:\n";
+  sudahSikepPagi.forEach((data, index) => {
+    outputText += `${index + 1}. ${data.nama} - ${data.hadir}\n`;
+  });
+
+  outputText += "\n\nSudah SIKEP Pulang:\n";
+  sudahSikepPulang.forEach((data, index) => {
+    outputText += `${index + 1}. ${data.nama} - ${data.pulang}\n`;
+  });
+
+  outputText += "\n\nTidak SIKEP Pulang:\n";
+  tidakSikepPulang.forEach((data, index) => {
+    outputText += `${index + 1}. ${data.nama}\n`;
+  });
+
   res.send(
     JSON.stringify(
       {
@@ -103,6 +128,8 @@ function processData(html, res) {
       2,
     ),
   );
+
+  return outputText;
 }
 
 app.get("/sikep", async (req, res) => {
@@ -125,6 +152,13 @@ app.get("/sikep", async (req, res) => {
           }
         });
       }, 10000);
+      const options = {
+        method: "GET",
+        url: `https://notifku.my.id/send?number=000&to=6285255646434@s.whatsapp.net&type=chat&message=${encodeURIComponent(
+          outputText,
+        )}`,
+      };
+      return await request(options);
     } else {
       console.log("Login gagal");
       res.json({
