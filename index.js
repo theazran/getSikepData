@@ -1,8 +1,8 @@
 const express = require("express");
-let request = require("request-promise");
+const requestPromise = require("request-promise");
 const cheerio = require("cheerio");
-const cookieJar = request.jar();
-request = request.defaults({ jar: cookieJar });
+const cookieJar = requestPromise.jar();
+const request = requestPromise.defaults({ jar: cookieJar });
 require("dotenv").config();
 const fs = require("fs");
 
@@ -11,6 +11,7 @@ app.use(express.json());
 const port = 3000;
 
 const requestTimeout = 30000;
+
 async function fetchCSRFToken() {
   const result = await request.get(
     "https://sikep.mahkamahagung.go.id/site/login",
@@ -31,8 +32,8 @@ async function login(csrfToken) {
     {
       form: {
         csrfParamSikepBackend: csrfToken,
-        "LoginForm[username]": process.env.USERNAME,
-        "LoginForm[password]": process.env.PASSWORD,
+        "LoginForm[username]": '',
+        "LoginForm[password]": '',
         "LoginForm[rememberMe]": 0,
       },
       followAllRedirects: true,
@@ -50,14 +51,32 @@ async function scrapeData() {
       Cookie: cookieJar.getCookieString(url),
     },
   };
-  // fs.writeFileSync("cookies.json", JSON.stringify(cookieJar.getCookieString(url)));
   const html = await request(options);
   return html;
 }
 
-function processData(html, res) {
+async function scrapeDetailPage(url) {
+  const options = {
+    url: `https://sikep.mahkamahagung.go.id${url}`,
+    headers: {
+      Cookie: cookieJar.getCookieString(url),
+    },
+  };
+  try {
+    const html = await request(options);
+    const $ = cheerio.load(html);
+    let detailText = $("th:contains('Status Presensi')").next('td').text().trim();
+    return detailText;
+  } catch (error) {
+    console.error(`Error fetching detail for ${url}:`, error);
+    return null;
+  }
+}
+
+async function processData(html) {
   const $ = cheerio.load(html);
   const jsonData = [];
+  const detailPromises = [];
 
   $("table tr").each((index, element) => {
     if (index !== 0) {
@@ -65,116 +84,70 @@ function processData(html, res) {
       const tanggal = $(cells[1]).text().trim();
       const nip = $(cells[2]).text().trim();
       const nama = $(cells[3]).text().trim();
-      const statusPresensi = $(cells[4]).text().trim();
+      // const statusPresensi = $(cells[4]).text().trim();
       const hadir = $(cells[5]).text().trim();
       const siang = $(cells[6]).text().trim();
       const pulang = $(cells[7]).text().trim();
-
-      jsonData.push({
-        tanggal,
-        nip,
-        nama,
-        statusPresensi,
-        hadir,
-        siang,
-        pulang,
-      });
+      const alasan = $(cells[8]).find('a.fa.fa-newspaper-o.btn-sm.btn-default').attr('href');
+      if (alasan) {
+        const detailPromise = scrapeDetailPage(alasan).then(statusPresensi => {
+          const apaAlasannya = statusPresensi.replace(/\\n+/g, ' ').trim();
+          return { tanggal, nip, nama, statusPresensi: apaAlasannya, hadir, siang, pulang };
+        });
+        detailPromises.push(detailPromise);
+      } else {
+        jsonData.push({ tanggal, nip, nama, statusPresensi: 'Tidak Presensi', hadir, siang, pulang });
+      }
     }
   });
 
-  const telatSikep = jsonData.filter((data) => data.hadir >= "08:01");
-  const tidakSikepPagi = jsonData.filter((data) => data.hadir === "-");
-  const tidakSikepPulang = jsonData.filter((data) => data.pulang === "-");
-  const sudahSikepPagi = jsonData.filter((data) => data.hadir !== "-");
-  const sudahSikepPulang = jsonData.filter((data) => data.pulang !== "-");
-  const author = "M Asran";
-
-  let outputText = "Telat SIKEP Pagi:\n";
-  telatSikep.forEach((data, index) => {
-    outputText += `${index + 1}. ${data.nama} - ${data.hadir}\n`;
-  });
-
-  outputText += "\n\nTidak SIKEP Pagi:\n";
-  tidakSikepPagi.forEach((data, index) => {
-    outputText += `${index + 1}. ${data.nama}\n`;
-  });
-
-  outputText += "\n\nSudah SIKEP Pagi:\n";
-  sudahSikepPagi.forEach((data, index) => {
-    outputText += `${index + 1}. ${data.nama} - ${data.hadir}\n`;
-  });
-
-  outputText += "\n\nSudah SIKEP Pulang:\n";
-  sudahSikepPulang.forEach((data, index) => {
-    outputText += `${index + 1}. ${data.nama} - ${data.pulang}\n`;
-  });
-
-  outputText += "\n\nTidak SIKEP Pulang:\n";
-  tidakSikepPulang.forEach((data, index) => {
-    outputText += `${index + 1}. ${data.nama}\n`;
-  });
-
-  res.send(
-    JSON.stringify(
-      {
-        telatSikep,
-        tidakSikepPagi,
-        sudahSikepPagi,
-        tidakSikepPulang,
-        sudahSikepPulang,
-        author,
-      },
-      null,
-      2,
-    ),
-  );
-
-  return outputText;
+  const details = await Promise.all(detailPromises);
+  jsonData.push(...details);
+  return jsonData;
 }
 
 app.get("/sikep", async (req, res) => {
   try {
     const csrfToken = await fetchCSRFToken();
-    console.log("Mendapatkan CSRF Token...");
+    console.log("CSRF Token retrieved...");
     const isLoggedIn = await login(csrfToken);
     if (isLoggedIn) {
-      console.log("Login berhasil...");
+      console.log("Logged in successfully...");
       const html = await scrapeData();
-      console.log("Mendapatkan data...");
-      const outputText = processData(html, res);
-      console.log("Data berhasil diolah...");
-      setTimeout(() => {
-        cookieJar._jar.removeAllCookies(function (err) {
-          if (err) {
-            console.error("Gagal menghapus cookie:", err);
-          } else {
-            console.log("Cookie berhasil dihapus.");
-          }
-        });
-      }, 10000);
-      const options = {
-        method: "GET",
-        url: `https://notifku.my.id/send?number=000&to=6285255646434@s.whatsapp.net&type=chat&message=${encodeURIComponent(
-          outputText,
-        )}`,
+      console.log("Data retrieved...");
+      const jsonData = await processData(html);
+      console.log("Data processed successfully...");
+
+      const telatSikep = jsonData.filter(data => data.hadir >= "08:01");
+      const tidakSikepPagi = jsonData.filter(data => data.hadir === "-");
+      const sudahSikepPagi = jsonData.filter(data => data.hadir !== "-");
+      const tidakSikepPulang = jsonData.filter(data => data.pulang === "-");
+      const sudahSikepPulang = jsonData.filter(data => data.pulang !== "-");
+
+      const response = {
+        telatSikep,
+        tidakSikepPagi,
+        sudahSikepPagi,
+        tidakSikepPulang,
+        sudahSikepPulang,
+        author: "https://instagram.com/theazran_"
       };
-      return await request(options);
+      res.status(200).json(response);
     } else {
-      console.log("Login gagal");
-      res.json({
-        status: 401,
-        message: "Login gagal",
-        author: "M Asran",
+      console.log("Login failed");
+      res.status(401).json({
+        message: "Login failed",
+        author: "https://instagram.com/theazran_"
       });
     }
   } catch (error) {
     console.error("Error:", error.message);
-    res.status(500).send({ error: "Internal server error" });
+    res.status(500).send({ error: "Internal server error", author: "https://instagram.com/theazran_" });
   }
 });
 
 app.listen(port, () => {
-  console.log(`Oke gasss... ${port}`);
+  console.log(`Server running on port ${port}`);
 });
 
 module.exports = app;
